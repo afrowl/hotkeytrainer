@@ -1,0 +1,1 @@
+{"prompts": [{"name": "copy", "hotkey": "ctrl+c", "weight": 1.0}, {"name": "paste", "hotkey": "ctrl+v", "weight": 1.0}, {"name": "g", "hotkey": "g", "weight": 1.0}], "visible_prompts": 3, "sequence_groups": []}
