@@ -25,7 +25,6 @@ class HotkeyTrainer:
         self.wrong_attempt = False  # Track if last attempt was wrong
         self.waiting_for_combination = False  # Track if we're waiting for a complete combination
         self.target_hotkey_parts = set()  # Track parts of the target hotkey
-        self.keyboard_hook = None  # Track the current keyboard hook
         
         # Key mapping for normalization
         self.modifier_map = {
@@ -313,10 +312,8 @@ class HotkeyTrainer:
         dialog.transient(parent)  # Make dialog modal
         dialog.grab_set()  # Make dialog modal
         
-        # Remove any existing keyboard hook
-        if self.keyboard_hook:
-            keyboard.unhook(self.keyboard_hook)
-            self.keyboard_hook = None
+        # Temporarily disable global keyboard hook
+        keyboard.unhook_all()
         
         ttk.Label(dialog, text="Prompt Name:").pack(pady=5)
         name_entry = ttk.Entry(dialog)
@@ -354,7 +351,7 @@ class HotkeyTrainer:
             hotkey_area.configure(relief="sunken")
             
             # Set up keyboard hook for capturing
-            self.keyboard_hook = keyboard.hook(on_dialog_key_event, suppress=True)
+            keyboard.hook(on_dialog_key_event, suppress=True)
         
         def stop_hotkey_capture():
             is_capturing_hotkey[0] = False
@@ -362,9 +359,7 @@ class HotkeyTrainer:
             hotkey_area.configure(relief="solid")
             
             # Remove keyboard hook
-            if self.keyboard_hook:
-                keyboard.unhook(self.keyboard_hook)
-                self.keyboard_hook = None
+            keyboard.unhook_all()
         
         def on_dialog_key_event(event):
             if not is_capturing_hotkey[0]:
@@ -639,6 +634,9 @@ class HotkeyTrainer:
             
             # Normalize the key name
             key_name = self._normalize_key(event.name)
+            if key_name in self.current_keys:  # Skip if key is already pressed
+                return True
+                
             self.current_keys.add(key_name)
             
             # Update display with normalized hotkey
@@ -756,37 +754,15 @@ class HotkeyTrainer:
             if not self.root.focus_displayof() or any(w.winfo_exists() for w in self.root.winfo_children() if isinstance(w, tk.Toplevel)):
                 return True  # Don't suppress if not focused
             
+            # Only remove the key from current_keys, no display updates
             normalized_key = self._normalize_key(event.name)
             if normalized_key in self.current_keys:
                 self.current_keys.remove(normalized_key)
-                
-                # If we're waiting for a combination and all keys are released, cancel the wait
-                if self.waiting_for_combination:
-                    current_parts = set(self._normalize_hotkey(self.current_keys).split('+'))
-                    
-                    # Only cancel if we have no keys pressed or if remaining keys don't match target
-                    if not current_parts or not current_parts.issubset(self.target_hotkey_parts):
-                        self.waiting_for_combination = False
-                        self.target_hotkey_parts.clear()
             
             return True  # Don't suppress key up events
         
-        # Set up the keyboard hook for the main window
-        self.keyboard_hook = keyboard.hook(on_key_down, suppress=True)
+        keyboard.on_press(on_key_down, suppress=True)
         keyboard.on_release(on_key_up, suppress=True)
-        
-        # Add focus handlers for the main window
-        def on_focus_in(event):
-            if not self.keyboard_hook:
-                self.keyboard_hook = keyboard.hook(on_key_down, suppress=True)
-        
-        def on_focus_out(event):
-            if self.keyboard_hook:
-                keyboard.unhook(self.keyboard_hook)
-                self.keyboard_hook = None
-        
-        self.root.bind('<FocusIn>', on_focus_in)
-        self.root.bind('<FocusOut>', on_focus_out)
     
     def run(self):
         self.root.mainloop()
